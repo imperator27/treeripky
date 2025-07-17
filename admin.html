@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель адміністратора</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .stat-number {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .applications-list {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .application-item {
+            padding: 20px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.3s ease;
+        }
+
+        .application-item:hover {
+            background: #f8f9fa;
+        }
+
+        .application-item:last-child {
+            border-bottom: none;
+        }
+
+        .application-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .application-id {
+            font-weight: bold;
+            color: #667eea;
+            font-size: 16px;
+        }
+
+        .application-date {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .application-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .detail-item {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .detail-value {
+            color: #34495e;
+            font-size: 14px;
+        }
+
+        .threat-description {
+            grid-column: 1 / -1;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-нова {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-в_роботі {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status-виконана {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-відхилена {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        @media (max-width: 768px) {
+            .application-details {
+                grid-template-columns: 1fr;
+            }
+            
+            .controls {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>👨‍💼 Панель адміністратора</h1>
+            <p>Управління заявками на видалення дерев</p>
+        </div>
+
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="totalCount">...</div>
+                <div class="stat-label">Всього заявок</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="newCount">...</div>
+                <div class="stat-label">Нових</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="todayCount">...</div>
+                <div class="stat-label">Сьогодні</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="pdfCount">...</div>
+                <div class="stat-label">З PDF</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" onclick="loadApplications()">
+                🔄 Оновити
+            </button>
+            <button class="btn btn-success" onclick="exportData()">
+                📊 Експорт Excel
+            </button>
+            <button class="btn btn-info" onclick="viewStats()">
+                📈 Детальна статистика
+            </button>
+        </div>
+
+        <div class="applications-list">
+            <div id="applicationsList">
+                <div class="loading">
+                    <h3>📡 Завантажуємо заяви...</h3>
+                    <p>Зачекайте, будь ласка</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let applications = [];
+
+        // Автоматичне визначення URL сервера
+        function getServerURL() {
+            if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                return window.location.origin;
+            }
+            return 'http://localhost:3000';
+        }
+
+        // Завантаження заявок
+        async function loadApplications() {
+            const serverURL = getServerURL();
+            
+            try {
+                console.log('Завантажуємо заяви з:', `${serverURL}/api/applications`);
+                
+                const response = await fetch(`${serverURL}/api/applications`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    applications = result.data || [];
+                    displayApplications();
+                    updateStats();
+                } else {
+                    throw new Error(result.error || 'Помилка завантаження');
+                }
+            } catch (error) {
+                console.error('Помилка завантаження заявок:', error);
+                document.getElementById('applicationsList').innerHTML = `
+                    <div class="error">
+                        <h3>❌ Помилка підключення</h3>
+                        <p>Не вдається підключитися до сервера: ${error.message}</p>
+                        <button onclick="loadApplications()" class="btn btn-primary" style="margin-top: 10px;">
+                            🔄 Спробувати знову
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // Відображення заявок
+        function displayApplications() {
+            const container = document.getElementById('applicationsList');
+            
+            if (applications.length === 0) {
+                container.innerHTML = `
+                    <div class="loading">
+                        <h3>📭 Заявок немає</h3>
+                        <p>Нові заявки з'являться тут автоматично</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Сортуємо по даті (нові спочатку)
+            applications.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+
+            container.innerHTML = applications.map(app => `
+                <div class="application-item">
+                    <div class="application-header">
+                        <div>
+                            <div class="application-id">${app.applicationNumber || app.id}</div>
+                            <div class="application-date">
+                                ${new Date(app.submittedAt).toLocaleString('uk-UA')}
+                            </div>
+                        </div>
+                        <span class="status-badge status-${app.status || 'нова'}">
+                            ${app.status || 'нова'}
+                        </span>
+                    </div>
+                    
+                    <div class="application-details">
+                        <div class="detail-item">
+                            <div class="detail-label">Заявник</div>
+                            <div class="detail-value">${app.fullName}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Адреса заявника</div>
+                            <div class="detail-value">${app.address}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Телефон</div>
+                            <div class="detail-value">${app.phone || 'Не вказано'}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Адреса дерева</div>
+                            <div class="detail-value">${app.treeAddress}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Вид дерева</div>
+                            <div class="detail-value">${app.treeType}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Вік дерева</div>
+                            <div class="detail-value">${app.treeAge || 'Не вказано'}</div>
+                        </div>
+                        <div class="detail-item threat-description">
+                            <div class="detail-label">Опис загрози</div>
+                            <div class="detail-value">${app.threat}</div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                        ${app.pdfFileName ? `
+                            <button class="btn btn-info" onclick="downloadPDF('${app.applicationNumber || app.id}')">
+                                📄 Скачати PDF
+                            </button>
+                        ` : ''}
+                        <button class="btn btn-success" onclick="viewDetails('${app.applicationNumber || app.id}')">
+                            👁️ Детальніше
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Оновлення статистики
+        function updateStats() {
+            const today = new Date().toDateString();
+            
+            const stats = {
+                total: applications.length,
+                new: applications.filter(app => (app.status || 'нова') === 'нова').length,
+                today: applications.filter(app => 
+                    new Date(app.submittedAt).toDateString() === today
+                ).length,
+                withPDF: applications.filter(app => app.pdfFileName).length
+            };
+
+            document.getElementById('totalCount').textContent = stats.total;
+            document.getElementById('newCount').textContent = stats.new;
+            document.getElementById('todayCount').textContent = stats.today;
+            document.getElementById('pdfCount').textContent = stats.withPDF;
+        }
+
+        // Скачування PDF
+        function downloadPDF(applicationId) {
+            const serverURL = getServerURL();
+            const url = `${serverURL}/api/applications/${applicationId}/pdf`;
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Заявка_${applicationId}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Перегляд деталей
+        function viewDetails(applicationId) {
+            const app = applications.find(a => 
+                (a.applicationNumber || a.id) === applicationId
+            );
+            
+            if (app) {
+                alert(`
+ЗАЯВКА ${app.applicationNumber || app.id}
+
+Заявник: ${app.fullName}
+Телефон: ${app.phone || 'Не вказано'}
+Адреса заявника: ${app.address}
+
+Дерево: ${app.treeType}
+Вік: ${app.treeAge || 'Не вказано'}
+Адреса дерева: ${app.treeAddress}
+
+Загроза: ${app.threat}
+
+Дата подання: ${new Date(app.submittedAt).toLocaleString('uk-UA')}
+Статус: ${app.status || 'нова'}
+                `);
+            }
+        }
+
+        // Експорт даних
+        function exportData() {
+            if (applications.length === 0) {
+                alert('Немає даних для експорту');
+                return;
+            }
+
+            const csvContent = [
+                'Номер заявки,ПІБ заявника,Адреса заявника,Телефон,Адреса дерева,Вид дерева,Вік дерева,Загроза,Дата подання,Статус',
+                ...applications.map(app => [
+                    app.applicationNumber || app.id,
+                    app.fullName,
+                    app.address,
+                    app.phone || '',
+                    app.treeAddress,
+                    app.treeType,
+                    app.treeAge || '',
+                    app.threat.replace(/,/g, ';'),
+                    new Date(app.submittedAt).toLocaleDateString('uk-UA'),
+                    app.status || 'нова'
+                ].join(','))
+            ].join('\n');
+
+            const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `Заявки_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Детальна статистика
+        async function viewStats() {
+            const serverURL = getServerURL();
+            
+            try {
+                const response = await fetch(`${serverURL}/api/applications/stats`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    const stats = result.stats;
+                    alert(`
+СТАТИСТИКА ЗАЯВОК
+
+Загалом: ${stats.total}
+Нових: ${stats.byStatus?.нова || 0}
+В роботі: ${stats.byStatus?.в_роботі || 0}
+Виконаних: ${stats.byStatus?.виконана || 0}
+Відхилених: ${stats.byStatus?.відхилена || 0}
+
+З PDF файлами: ${stats.withPDF}
+
+Найпопулярніші види дерев:
+${Object.entries(stats.byTreeType || {})
+  .sort(([,a], [,b]) => b - a)
+  .slice(0, 5)
+  .map(([type, count]) => `- ${type}: ${count}`)
+  .join('\n')}
+                    `);
+                }
+            } catch (error) {
+                alert('Помилка отримання статистики: ' + error.message);
+            }
+        }
+
+        // Автозавантаження при завантаженні сторінки
+        document.addEventListener('DOMContentLoaded', function() {
+            loadApplications();
+            
+            // Автооновлення кожні 30 секунд
+            setInterval(loadApplications, 30000);
+        });
+    </script>
+</body>
+</html>
