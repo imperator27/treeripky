@@ -40,6 +40,7 @@ app.use((req, res, next) => {
     next();
 });
 
+// ===== ДОДАЙ ЦІ РЯДКИ ТУТ =====
 // Статичні файли для фронтенду
 app.use(express.static(__dirname));
 
@@ -47,6 +48,7 @@ app.use(express.static(__dirname));
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
+// ===== КІНЕЦЬ ДОДАВАННЯ =====
 
 // Функція для читання заяв з файлу
 function readApplications() {
@@ -394,16 +396,15 @@ app.use((err, req, res, next) => {
 });
 
 // Запуск сервера
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.log('\n' + '='.repeat(50));
     console.log('🚀 Сервер запущено успішно!');
     console.log('='.repeat(50));
-    console.log(`📍 URL: http://localhost:${PORT}`);
-    console.log(`🏥 Health check: http://localhost:${PORT}/health`);
-    console.log(`📋 API заяв: http://localhost:${PORT}/api/applications`);
-    console.log(`📊 Статистика: http://localhost:${PORT}/api/applications/stats`);
-    console.log(`📁 Папка даних: ${dataDir}`);
-    console.log(`📄 Папка PDF: ${uploadsDir}`);
+    console.log(`📍 Порт: ${PORT}`);
+    console.log(`🏥 Health check: /health`);
+    console.log(`📋 API заяв: /api/applications`);
+    console.log(`📊 Статистика: /api/applications/stats`);
+    console.log(`🌍 Режим: ${process.env.NODE_ENV || 'development'}`);
     console.log('='.repeat(50));
     console.log('✨ Готовий до роботи!\n');
 });
