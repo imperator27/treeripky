@@ -1,1 +1,597 @@
-ппр
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Заява на видалення небезпечного дерева</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            min-height: 100vh;
+        }
+
+        .form-section {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .preview-section {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+            text-align: center;
+            font-size: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #34495e;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .generate-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .generate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .download-btn {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(40, 167, 69, 0.3);
+        }
+
+        .submit-btn {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(255, 107, 107, 0.3);
+        }
+
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .document-preview {
+            flex-grow: 1;
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            font-size: 14px;
+            line-height: 1.6;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            min-height: 600px;
+        }
+
+        .document-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .document-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .document-subtitle {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .document-body {
+            text-align: justify;
+        }
+
+        .document-footer {
+            margin-top: 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .signature-line {
+            border-bottom: 1px solid #333;
+            width: 200px;
+            padding-bottom: 5px;
+            text-align: center;
+        }
+
+        .date-line {
+            border-bottom: 1px solid #333;
+            width: 150px;
+            padding-bottom: 5px;
+            text-align: center;
+        }
+
+        .placeholder {
+            color: #999;
+            font-style: italic;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-loading {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="form-section">
+            <h1>📋 Заява на видалення дерева</h1>
+            <form id="applicationForm">
+                <div class="form-group">
+                    <label for="fullName">ПІБ заявника:</label>
+                    <input type="text" id="fullName" placeholder="Іванов Іван Іванович">
+                </div>
+
+                <div class="form-group">
+                    <label for="address">Місце проживання:</label>
+                    <input type="text" id="address" placeholder="м. Київ, вул. Примірна, буд. 1, кв. 1">
+                </div>
+
+                <div class="form-group">
+                    <label for="phone">Телефон:</label>
+                    <input type="tel" id="phone" placeholder="+380 (67) 123-45-67">
+                </div>
+
+                <div class="form-group">
+                    <label for="treeAddress">Адреса розташування дерева:</label>
+                    <input type="text" id="treeAddress" placeholder="м. Київ, вул. Примірна, буд. 1 (у дворі)">
+                </div>
+
+                <div class="form-group">
+                    <label for="treeType">Вид дерева:</label>
+                    <select id="treeType">
+                        <option value="">Оберіть вид дерева</option>
+                        <option value="Береза">Береза</option>
+                        <option value="Тополя">Тополя</option>
+                        <option value="Клен">Клен</option>
+                        <option value="Дуб">Дуб</option>
+                        <option value="Ялина">Ялина</option>
+                        <option value="Сосна">Сосна</option>
+                        <option value="Липа">Липа</option>
+                        <option value="Ясен">Ясен</option>
+                        <option value="Каштан">Каштан</option>
+                        <option value="Інше">Інше</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="treeAge">Приблизний вік дерева:</label>
+                    <select id="treeAge">
+                        <option value="">Оберіть вік</option>
+                        <option value="до 10 років">до 10 років</option>
+                        <option value="10-20 років">10-20 років</option>
+                        <option value="20-30 років">20-30 років</option>
+                        <option value="30-50 років">30-50 років</option>
+                        <option value="більше 50 років">більше 50 років</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="threat">Яку загрозу становить дерево:</label>
+                    <textarea id="threat" placeholder="Опишіть детально: тріщини в стовбурі, загроза падіння на будівлю, пошкодження комунікацій тощо"></textarea>
+                </div>
+
+                <button type="button" class="generate-btn" id="generateBtn">
+                    🔄 Сформувати заяву
+                </button>
+            </form>
+        </div>
+
+        <div class="preview-section">
+            <h1>📄 Попередній перегляд</h1>
+            <div class="document-preview" id="documentPreview">
+                <div class="document-header">
+                    <div class="document-title">ЗАЯВА</div>
+                    <div class="document-subtitle">про видалення небезпечного дерева</div>
+                </div>
+                
+                <div class="document-body">
+                    <p class="placeholder">Заповніть форму зліва, щоб побачити готову заяву</p>
+                </div>
+            </div>
+            <div id="actionButtons" style="display: none;">
+                <button type="button" class="download-btn" id="downloadBtn">
+                    💾 Скачати PDF
+                </button>
+                <button type="button" class="submit-btn" id="submitBtn">
+                    📤 Надіслати заяву
+                </button>
+            </div>
+            <div id="submissionStatus" style="display: none; margin-top: 15px; padding: 15px; border-radius: 10px; text-align: center; font-weight: 600;"></div>
+        </div>
+    </div>
+
+    <script>
+        // Функція генерації документа
+        function generateDocument() {
+            console.log('Функція generateDocument викликана');
+            
+            const formData = {
+                fullName: document.getElementById('fullName').value,
+                address: document.getElementById('address').value,
+                phone: document.getElementById('phone').value,
+                treeAddress: document.getElementById('treeAddress').value,
+                treeType: document.getElementById('treeType').value,
+                treeAge: document.getElementById('treeAge').value,
+                threat: document.getElementById('threat').value
+            };
+
+            console.log('Дані форми:', formData);
+
+            // Перевіряємо, що всі поля заповнені
+            const requiredFields = ['fullName', 'address', 'treeAddress', 'treeType', 'threat'];
+            const emptyFields = requiredFields.filter(field => !formData[field]);
+
+            if (emptyFields.length > 0) {
+                alert('Будь ласка, заповніть всі обов\'язкові поля: ' + emptyFields.join(', '));
+                return;
+            }
+
+            const currentDate = new Date().toLocaleDateString('uk-UA');
+
+            const documentHTML = `
+                <div class="document-header">
+                    <div class="document-title">ЗАЯВА</div>
+                    <div class="document-subtitle">про видалення небезпечного дерева</div>
+                </div>
+                
+                <div class="document-body">
+                    <p style="margin-bottom: 20px;">
+                        Я, <strong>${formData.fullName}</strong>, що проживаю за адресою: 
+                        <strong>${formData.address}</strong>${formData.phone ? `, тел. ${formData.phone}` : ''}, 
+                        звертаюся із заявою про видалення небезпечного дерева.
+                    </p>
+
+                    <p style="margin-bottom: 15px;">
+                        <strong>Місцезнаходження дерева:</strong> ${formData.treeAddress}
+                    </p>
+
+                    <p style="margin-bottom: 15px;">
+                        <strong>Характеристики дерева:</strong><br>
+                        - Вид: ${formData.treeType}<br>
+                        ${formData.treeAge ? `- Приблизний вік: ${formData.treeAge}<br>` : ''}
+                    </p>
+
+                    <p style="margin-bottom: 20px;">
+                        <strong>Опис загрози:</strong><br>
+                        ${formData.threat}
+                    </p>
+
+                    <p style="margin-bottom: 30px;">
+                        Прошу розглянути дану заяву та вжити заходів щодо видалення зазначеного дерева 
+                        у зв'язку з його небезпечним станом та загрозою безпеці.
+                    </p>
+
+                    <p>
+                        До заяви додаю фотографії дерева та документи, що підтверджують необхідність його видалення.
+                    </p>
+                </div>
+
+                <div class="document-footer">
+                    <div>
+                        <div style="margin-bottom: 10px;">Дата: ${currentDate}</div>
+                        <div class="date-line"></div>
+                    </div>
+                    <div>
+                        <div style="margin-bottom: 10px;">Підпис заявника:</div>
+                        <div class="signature-line"></div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('documentPreview').innerHTML = documentHTML;
+            document.getElementById('actionButtons').style.display = 'block';
+            document.getElementById('submissionStatus').style.display = 'none';
+            
+            console.log('Документ згенеровано успішно');
+        }
+
+        // Функція скачування PDF
+        async function downloadPDF() {
+            const element = document.getElementById('documentPreview');
+            
+            try {
+                const canvas = await html2canvas(element, {
+                    scale: 2,
+                    useCORS: true,
+                    backgroundColor: '#ffffff'
+                });
+
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                
+                const imgWidth = 210;
+                const pageHeight = 297;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                const imgData = canvas.toDataURL('image/png');
+                
+                pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, Math.min(imgHeight, pageHeight));
+                
+                if (imgHeight > pageHeight) {
+                    let heightLeft = imgHeight - pageHeight;
+                    let position = -pageHeight;
+                    
+                    while (heightLeft >= 0) {
+                        pdf.addPage();
+                        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                        heightLeft -= pageHeight;
+                        position -= pageHeight;
+                    }
+                }
+
+                const fullName = document.getElementById('fullName').value || 'Заявник';
+                const fileName = `Заява_видалення_дерева_${fullName.replace(/\s+/g, '_')}.pdf`;
+                pdf.save(fileName);
+                
+            } catch (error) {
+                console.error('Помилка при створенні PDF:', error);
+                alert('Сталася помилка при створенні PDF. Спробуйте ще раз.');
+            }
+        }
+
+        // Функція надсилання на сервер
+        async function submitToServer() {
+            const submitBtn = document.getElementById('submitBtn');
+            const statusDiv = document.getElementById('submissionStatus');
+            
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Надсилаємо...';
+            statusDiv.style.display = 'block';
+            statusDiv.className = 'status-loading';
+            statusDiv.textContent = 'Підготовка заяви до надсилання...';
+
+            try {
+                const formData = {
+                    fullName: document.getElementById('fullName').value,
+                    address: document.getElementById('address').value,
+                    phone: document.getElementById('phone').value,
+                    treeAddress: document.getElementById('treeAddress').value,
+                    treeType: document.getElementById('treeType').value,
+                    treeAge: document.getElementById('treeAge').value,
+                    threat: document.getElementById('threat').value,
+                    submissionDate: new Date().toISOString(),
+                    submissionId: 'TREE-' + Date.now()
+                };
+
+                const element = document.getElementById('documentPreview');
+                const canvas = await html2canvas(element, {
+                    scale: 2,
+                    useCORS: true,
+                    backgroundColor: '#ffffff'
+                });
+
+                statusDiv.textContent = 'Генеруємо PDF документ...';
+
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                
+                const imgWidth = 210;
+                const pageHeight = 297;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                const imgData = canvas.toDataURL('image/png');
+                
+                pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, Math.min(imgHeight, pageHeight));
+                
+                if (imgHeight > pageHeight) {
+                    let heightLeft = imgHeight - pageHeight;
+                    let position = -pageHeight;
+                    
+                    while (heightLeft >= 0) {
+                        pdf.addPage();
+                        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                        heightLeft -= pageHeight;
+                        position -= pageHeight;
+                    }
+                }
+
+                const pdfBase64 = pdf.output('datauristring');
+                statusDiv.textContent = 'Надсилаємо на сервер...';
+
+                // Надсилання на сервер (з PDF)
+                const response = await fetch('http://localhost:3000/api/applications', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        fullName: formData.fullName,
+                        address: formData.address,
+                        phone: formData.phone,
+                        treeAddress: formData.treeAddress,
+                        treeType: formData.treeType,
+                        treeAge: formData.treeAge,
+                        threat: formData.threat,
+                        pdfBase64: pdfBase64 // Тепер надсилаємо PDF!
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Помилка HTTP! статус: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    statusDiv.className = 'status-success';
+                    statusDiv.innerHTML = `
+                        ✅ Заяву успішно надіслано!<br>
+                        <strong>Номер заяви:</strong> ${result.applicationNumber}<br>
+                        <small>Адміністратор отримав повідомлення</small>
+                    `;
+                    submitBtn.textContent = '✅ Надіслано';
+                    
+                    setTimeout(() => {
+                        if (confirm('Заяву надіслано! Очистити форму для нової заяви?')) {
+                            resetForm();
+                        }
+                    }, 3000);
+                } else {
+                    throw new Error(result.error || 'Помилка сервера');
+                }
+
+            } catch (error) {
+                console.error('Помилка надсилання:', error);
+                statusDiv.className = 'status-error';
+                statusDiv.innerHTML = `
+                    ❌ Помилка надсилання: ${error.message}<br>
+                    <small>Перевірте чи запущений сервер на порту 3000</small>
+                `;
+                submitBtn.disabled = false;
+                submitBtn.textContent = '📤 Повторити надсилання';
+            }
+        }
+
+        // Функція скидання форми
+        function resetForm() {
+            document.getElementById('applicationForm').reset();
+            document.getElementById('documentPreview').innerHTML = `
+                <div class="document-header">
+                    <div class="document-title">ЗАЯВА</div>
+                    <div class="document-subtitle">про видалення небезпечного дерева</div>
+                </div>
+                <div class="document-body">
+                    <p class="placeholder">Заповніть форму зліва, щоб побачити готову заяву</p>
+                </div>
+            `;
+            document.getElementById('actionButtons').style.display = 'none';
+            document.getElementById('submissionStatus').style.display = 'none';
+        }
+
+        // Додаємо обробники подій
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM завантажено');
+            
+            // Обробник для кнопки генерації
+            document.getElementById('generateBtn').addEventListener('click', generateDocument);
+            
+            // Обробник для кнопки скачування
+            document.getElementById('downloadBtn').addEventListener('click', downloadPDF);
+            
+            // Обробник для кнопки надсилання
+            document.getElementById('submitBtn').addEventListener('click', submitToServer);
+            
+            console.log('Обробники подій додано');
+        });
+    </script>
+</body>
+</html>
