@@ -521,7 +521,9 @@
             const statusDiv = document.getElementById('submissionStatus');
             const serverURL = getServerURL();
             
-            console.log('📤 Починаємо надсилання на:', serverURL);
+            console.log('📤 ПОЧАТОК НАДСИЛАННЯ');
+            console.log('🌐 Сервер URL:', serverURL);
+            console.log('🔗 Endpoint:', `${serverURL}/api/applications`);
             
             submitBtn.disabled = true;
             submitBtn.textContent = '⏳ Надсилаємо...';
@@ -582,65 +584,85 @@
                     reader.readAsDataURL(pdfBlob);
                 });
 
-                statusDiv.textContent = 'Надсилаємо на сервер...';
-                console.log('🌐 Надсилаємо POST запит на:', `${serverURL}/api/applications`);
+                console.log('📄 PDF створено, розмір:', pdfBase64.length);
 
-                // Надсилання на сервер
+                statusDiv.textContent = 'Надсилаємо на сервер...';
+                console.log('🚀 НАДСИЛАЄМО POST запит...');
+
+                const requestBody = {
+                    fullName: formData.fullName,
+                    address: formData.address,
+                    phone: formData.phone,
+                    treeAddress: formData.treeAddress,
+                    treeType: formData.treeType,
+                    treeAge: formData.treeAge,
+                    threat: formData.threat,
+                    pdfBase64: pdfBase64
+                };
+
+                console.log('📦 Розмір запиту:', JSON.stringify(requestBody).length, 'символів');
+
+                // ГОЛОВНИЙ ЗАПИТ НА СЕРВЕР
                 const response = await fetch(`${serverURL}/api/applications`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        fullName: formData.fullName,
-                        address: formData.address,
-                        phone: formData.phone,
-                        treeAddress: formData.treeAddress,
-                        treeType: formData.treeType,
-                        treeAge: formData.treeAge,
-                        threat: formData.threat,
-                        pdfBase64: pdfBase64
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
-                console.log('📨 Відповідь сервера статус:', response.status);
+                console.log('📨 Відповідь сервера:');
+                console.log('   Статус:', response.status);
+                console.log('   Status Text:', response.statusText);
+                console.log('   Headers:', Object.fromEntries(response.headers.entries()));
 
                 if (!response.ok) {
                     const errorText = await response.text();
                     console.error('❌ Помилка відповіді:', errorText);
-                    throw new Error(`Помилка HTTP! статус: ${response.status} - ${errorText}`);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}\n${errorText}`);
                 }
 
                 const result = await response.json();
-                console.log('✅ Результат:', result);
+                console.log('✅ Результат JSON:', result);
                 
                 if (result.success) {
                     statusDiv.className = 'status-success';
                     statusDiv.innerHTML = `
-                        ✅ Заяву успішно надіслано!<br>
+                        ✅ Заяву успішно надіслано на сервер!<br>
                         <strong>Номер заяви:</strong> ${result.applicationNumber}<br>
-                        <small>Адміністратор отримав повідомлення</small>
+                        <strong>Час:</strong> ${new Date().toLocaleTimeString()}<br>
+                        <small>Перевірте панель адміністратора через 10 секунд</small>
                     `;
-                    submitBtn.textContent = '✅ Надіслано';
+                    submitBtn.textContent = '✅ Надіслано на сервер';
+                    
+                    console.log('🎉 ЗАЯВУ УСПІШНО НАДІСЛАНО НА СЕРВЕР!');
                     
                     setTimeout(() => {
-                        if (confirm('Заяву надіслано! Очистити форму для нової заяви?')) {
+                        if (confirm('Заяву надіслано на сервер! Очистити форму для нової заяви?')) {
                             resetForm();
                         }
                     }, 3000);
                 } else {
-                    throw new Error(result.error || 'Помилка сервера');
+                    throw new Error(result.error || 'Сервер повернув success: false');
                 }
 
             } catch (error) {
-                console.error('❌ Помилка надсилання:', error);
+                console.error('❌ КРИТИЧНА ПОМИЛКА:', error);
                 statusDiv.className = 'status-error';
                 statusDiv.innerHTML = `
                     ❌ Помилка надсилання: ${error.message}<br>
-                    <small>Перевірте налагодження нижче</small>
+                    <small>Детальна інформація в консолі (F12)</small><br>
+                    <small>Сервер: ${serverURL}</small>
                 `;
                 submitBtn.disabled = false;
                 submitBtn.textContent = '📤 Повторити надсилання';
+                
+                // Додаткова діагностика
+                console.log('🔍 ДІАГНОСТИЧНА ІНФОРМАЦІЯ:');
+                console.log('   Поточний URL:', window.location.href);
+                console.log('   Hostname:', window.location.hostname);
+                console.log('   Server URL:', serverURL);
+                console.log('   User Agent:', navigator.userAgent);
             }
         }
 
