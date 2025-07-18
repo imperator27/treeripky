@@ -93,8 +93,18 @@
             color: white;
         }
 
-        .btn-info {
-            background: #17a2b8;
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
             color: white;
         }
 
@@ -296,27 +306,96 @@
         // Завантаження заявок
         async function loadApplications() {
             const serverURL = getServerURL();
+            const statusEl = document.getElementById('applicationsList');
             
             try {
-                console.log('Завантажуємо заяви з:', `${serverURL}/api/applications`);
+                console.log('🔄 Завантажуємо заяви з:', `${serverURL}/api/applications`);
+                
+                statusEl.innerHTML = `
+                    <div class="loading">
+                        <h3>🔄 Завантажуємо заяви...</h3>
+                        <p>Сервер: ${serverURL}</p>
+                    </div>
+                `;
                 
                 const response = await fetch(`${serverURL}/api/applications`);
+                console.log('📨 Статус відповіді:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const result = await response.json();
+                console.log('📋 Отримані дані:', result);
                 
                 if (result.success) {
                     applications = result.data || [];
+                    console.log(`✅ Завантажено ${applications.length} заяв`);
                     displayApplications();
                     updateStats();
                 } else {
-                    throw new Error(result.error || 'Помилка завантаження');
+                    throw new Error(result.error || 'API повернув success: false');
                 }
             } catch (error) {
-                console.error('Помилка завантаження заявок:', error);
-                document.getElementById('applicationsList').innerHTML = `
+                console.error('❌ Помилка завантаження заявок:', error);
+                statusEl.innerHTML = `
                     <div class="error">
                         <h3>❌ Помилка підключення</h3>
-                        <p>Не вдається підключитися до сервера: ${error.message}</p>
+                        <p><strong>URL:</strong> ${serverURL}/api/applications</p>
+                        <p><strong>Помилка:</strong> ${error.message}</p>
+                        <p><strong>Час:</strong> ${new Date().toLocaleTimeString()}</p>
                         <button onclick="loadApplications()" class="btn btn-primary" style="margin-top: 10px;">
+                            🔄 Спробувати знову
+                        </button>
+                        <button onclick="testServerHealth()" class="btn btn-info" style="margin-top: 10px;">
+                            🏥 Перевірити сервер
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // Тест здоров'я сервера
+        async function testServerHealth() {
+            const serverURL = getServerURL();
+            const statusEl = document.getElementById('applicationsList');
+            
+            try {
+                console.log('🏥 Тестуємо health endpoint...');
+                
+                statusEl.innerHTML = `
+                    <div class="loading">
+                        <h3>🏥 Перевіряємо стан сервера...</h3>
+                        <p>Тестуємо: ${serverURL}/health</p>
+                    </div>
+                `;
+                
+                const response = await fetch(`${serverURL}/health`);
+                const result = await response.json();
+                
+                console.log('🏥 Health check результат:', result);
+                
+                statusEl.innerHTML = `
+                    <div class="success">
+                        <h3>✅ Сервер працює!</h3>
+                        <p><strong>Статус:</strong> ${result.status}</p>
+                        <p><strong>Повідомлення:</strong> ${result.message}</p>
+                        <p><strong>Час сервера:</strong> ${result.timestamp}</p>
+                        <button onclick="loadApplications()" class="btn btn-primary" style="margin-top: 10px;">
+                            🔄 Завантажити заяви
+                        </button>
+                    </div>
+                `;
+                
+            } catch (error) {
+                console.error('❌ Health check failed:', error);
+                statusEl.innerHTML = `
+                    <div class="error">
+                        <h3>❌ Сервер недоступний</h3>
+                        <p><strong>URL:</strong> ${serverURL}/health</p>
+                        <p><strong>Помилка:</strong> ${error.message}</p>
+                        <p>Можливо, сервер "спить" і потребує часу для запуску (до 2 хвилин)</p>
+                        <button onclick="testServerHealth()" class="btn btn-primary" style="margin-top: 10px;">
                             🔄 Спробувати знову
                         </button>
                     </div>
@@ -395,6 +474,30 @@
                         <button class="btn btn-success" onclick="viewDetails('${app.applicationNumber || app.id}')">
                             👁️ Детальніше
                         </button>
+                        
+                        ${(app.status || 'нова') === 'нова' ? `
+                            <button class="btn btn-warning" onclick="updateStatus('${app.applicationNumber || app.id}', 'в_роботі')">
+                                ⚙️ На опрацювання
+                            </button>
+                            <button class="btn btn-danger" onclick="updateStatus('${app.applicationNumber || app.id}', 'відхилена')">
+                                ❌ Відхилити
+                            </button>
+                        ` : ''}
+                        
+                        ${(app.status || 'нова') === 'в_роботі' ? `
+                            <button class="btn btn-primary" onclick="createWorkOrder('${app.applicationNumber || app.id}')">
+                                📋 Створити ордер
+                            </button>
+                            <button class="btn btn-success" onclick="updateStatus('${app.applicationNumber || app.id}', 'виконана')">
+                                ✅ Виконано
+                            </button>
+                        ` : ''}
+                        
+                        ${(app.status || 'нова') === 'відхилена' ? `
+                            <button class="btn btn-secondary" onclick="updateStatus('${app.applicationNumber || app.id}', 'нова')">
+                                🔄 Повернути в роботу
+                            </button>
+                        ` : ''}
                     </div>
                 </div>
             `).join('');
@@ -524,7 +627,105 @@ ${Object.entries(stats.byTreeType || {})
             }
         }
 
-        // Автозавантаження при завантаженні сторінки
+        // Оновлення статусу заяви
+        async function updateStatus(applicationId, newStatus) {
+            const serverURL = getServerURL();
+            
+            try {
+                console.log(`Оновлюємо статус заяви ${applicationId} на "${newStatus}"`);
+                
+                const response = await fetch(`${serverURL}/api/admin/applications/${applicationId}/status`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        status: newStatus,
+                        adminNotes: `Статус змінено на "${newStatus}" ${new Date().toLocaleString('uk-UA')}`
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`✅ Статус заяви ${applicationId} змінено на "${newStatus}"`);
+                    // Оновлюємо список заяв
+                    loadApplications();
+                } else {
+                    throw new Error(result.error || 'Помилка оновлення статусу');
+                }
+                
+            } catch (error) {
+                console.error('Помилка оновлення статусу:', error);
+                alert(`❌ Помилка оновлення статусу: ${error.message}`);
+            }
+        }
+
+        // Створення робочого ордеру
+        async function createWorkOrder(applicationId) {
+            const application = applications.find(app => 
+                (app.applicationNumber || app.id) === applicationId
+            );
+            
+            if (!application) {
+                alert('Заявку не знайдено');
+                return;
+            }
+
+            const orderNumber = `ORD-${Date.now()}`;
+            const currentDate = new Date().toLocaleDateString('uk-UA');
+            
+            // Генеруємо робочий ордер
+            const orderContent = `
+РОБОЧИЙ ОРДЕР №${orderNumber}
+Дата створення: ${currentDate}
+
+=== ІНФОРМАЦІЯ ПРО ЗАЯВУ ===
+Номер заяви: ${application.applicationNumber || application.id}
+Заявник: ${application.fullName}
+Телефон: ${application.phone || 'Не вказано'}
+
+=== ЗАВДАННЯ ===
+Адреса виконання робіт: ${application.treeAddress}
+Вид дерева: ${application.treeType}
+Вік дерева: ${application.treeAge || 'Не вказано'}
+
+=== ОПИС ПРОБЛЕМИ ===
+${application.threat}
+
+=== ІНСТРУКЦІЇ ===
+1. Провести обстеження дерева
+2. Оцінити рівень небезпеки
+3. Виконати видалення згідно з технічними нормами
+4. Прибрати територію після робіт
+5. Повідомити про завершення
+
+=== ВІДПОВІДАЛЬНІ ===
+Бригадир: ___________________
+Виконавці: __________________
+Підпис: ____________________
+
+Термін виконання: ${new Date(Date.now() + 7*24*60*60*1000).toLocaleDateString('uk-UA')}
+            `;
+
+            // Створюємо та скачуємо ордер
+            const blob = new Blob([orderContent], { type: 'text/plain;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `Ордер_${orderNumber}_${application.fullName.replace(/\s/g, '_')}.txt`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // Оновлюємо статус на виконання
+            if (confirm(`Ордер №${orderNumber} створено та завантажено.\nПозначити заяву як "виконується"?`)) {
+                await updateStatus(applicationId, 'виконання');
+            }
+        }
         document.addEventListener('DOMContentLoaded', function() {
             loadApplications();
             
