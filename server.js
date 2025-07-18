@@ -1,741 +1,520 @@
-<!DOCTYPE html>
-<html lang="uk">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Панель адміністратора</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-        }
+// Створюємо папку для зберігання файлів якщо її немає
+const dataDir = path.join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir);
+    console.log('📁 Створено папку data для зберігання заяв');
+}
 
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #e0e0e0;
-        }
+// Створюємо папку для PDF файлів
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir);
+    console.log('📁 Створено папку uploads для PDF файлів');
+}
 
-        .header h1 {
-            color: #2c3e50;
-            font-size: 28px;
-            margin-bottom: 10px;
-        }
+// Налаштування CORS для роботи з браузером
+app.use(cors({
+    origin: '*', // Дозволяємо всі домени для тестування
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+}));
 
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
+// Налаштування для обробки JSON з великими файлами (PDF)
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
-        .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 15px;
-            text-align: center;
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-        }
+// Логування запитів
+app.use((req, res, next) => {
+    const timestamp = new Date().toLocaleString('uk-UA');
+    console.log(`[${timestamp}] ${req.method} ${req.url}`);
+    next();
+});
 
-        .stat-number {
-            font-size: 32px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
+// ===== ДОДАЙ ЦІ РЯДКИ ТУТ =====
+// Статичні файли для фронтенду
+app.use(express.static(__dirname));
 
-        .stat-label {
-            font-size: 14px;
-            opacity: 0.9;
-        }
+// Головна сторінка
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+// ===== КІНЕЦЬ ДОДАВАННЯ =====
 
-        .controls {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
+// Функція для читання заяв з файлу
+function readApplications() {
+    const today = new Date().toISOString().split('T')[0];
+    const fileName = path.join(dataDir, `заяви_${today}.json`);
+    
+    try {
+        if (fs.existsSync(fileName)) {
+            const data = fs.readFileSync(fileName, 'utf8');
+            return JSON.parse(data);
         }
+        return [];
+    } catch (error) {
+        console.error('❌ Помилка читання файлу заяв:', error);
+        return [];
+    }
+}
 
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s ease;
+// Функція для збереження заяв у файл
+function saveApplications(applications) {
+    const today = new Date().toISOString().split('T')[0];
+    const fileName = path.join(dataDir, `заяви_${today}.json`);
+    
+    try {
+        fs.writeFileSync(fileName, JSON.stringify(applications, null, 2), 'utf8');
+        console.log(`💾 Заяви збережено в файл: ${fileName}`);
+        return true;
+    } catch (error) {
+        console.error('❌ Помилка збереження файлу заяв:', error);
+        return false;
+    }
+}
+
+// Функція для збереження PDF файлу
+function savePDFFile(pdfBase64, applicationNumber, fullName) {
+    if (!pdfBase64) return null;
+    
+    try {
+        console.log('📄 Початок збереження PDF...');
+        
+        // Перевіряємо формат base64
+        let base64Data;
+        if (pdfBase64.startsWith('data:application/pdf;base64,')) {
+            base64Data = pdfBase64.replace(/^data:application\/pdf;base64,/, '');
+        } else if (pdfBase64.startsWith('data:')) {
+            // Якщо це інший MIME type, витягуємо base64 частину
+            base64Data = pdfBase64.split(',')[1];
+        } else {
+            // Якщо це вже чистий base64
+            base64Data = pdfBase64;
         }
-
-        .btn-primary {
-            background: #667eea;
-            color: white;
+        
+        // Перевіряємо чи base64 валідний
+        if (!base64Data || base64Data.length === 0) {
+            console.error('❌ Порожній base64 рядок');
+            return null;
         }
-
-        .btn-success {
-            background: #28a745;
-            color: white;
+        
+        // Створюємо ім'я файлу
+        const sanitizedName = fullName.replace(/[^а-яА-ЯіІїЇєЄa-zA-Z0-9]/g, '_');
+        const fileName = `${applicationNumber}_${sanitizedName}.pdf`;
+        const filePath = path.join(uploadsDir, fileName);
+        
+        // Зберігаємо файл
+        const buffer = Buffer.from(base64Data, 'base64');
+        fs.writeFileSync(filePath, buffer);
+        
+        // Перевіряємо розмір файлу
+        const stats = fs.statSync(filePath);
+        console.log(`📄 PDF збережено: ${fileName} (${(stats.size / 1024).toFixed(2)} KB)`);
+        
+        // Базова перевірка PDF заголовка
+        const fileBuffer = fs.readFileSync(filePath);
+        if (fileBuffer.slice(0, 4).toString() === '%PDF') {
+            console.log('✅ PDF файл валідний');
+        } else {
+            console.warn('⚠️ PDF файл може бути пошкоджений (немає PDF заголовка)');
         }
+        
+        return fileName;
+    } catch (error) {
+        console.error('❌ Помилка збереження PDF:', error);
+        return null;
+    }
+}
 
-        .btn-warning {
-            background: #ffc107;
-            color: #212529;
-        }
-
-        .btn-danger {
-            background: #dc3545;
-            color: white;
-        }
-
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        }
-
-        .applications-list {
-            background: white;
-            border-radius: 15px;
-            overflow: hidden;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-
-        .application-item {
-            padding: 20px;
-            border-bottom: 1px solid #f0f0f0;
-            transition: background-color 0.3s ease;
-        }
-
-        .application-item:hover {
-            background: #f8f9fa;
-        }
-
-        .application-item:last-child {
-            border-bottom: none;
-        }
-
-        .application-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .application-id {
-            font-weight: bold;
-            color: #667eea;
-            font-size: 16px;
-        }
-
-        .application-date {
-            color: #666;
-            font-size: 14px;
-        }
-
-        .application-details {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-
-        .detail-item {
-            background: #f8f9fa;
-            padding: 12px;
-            border-radius: 8px;
-            border-left: 4px solid #667eea;
-        }
-
-        .detail-label {
-            font-weight: 600;
-            color: #2c3e50;
-            font-size: 12px;
-            text-transform: uppercase;
-            margin-bottom: 5px;
-        }
-
-        .detail-value {
-            color: #34495e;
-            font-size: 14px;
-        }
-
-        .threat-description {
-            grid-column: 1 / -1;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-        }
-
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 10px;
-            margin: 20px 0;
-        }
-
-        .success {
-            background: #d4edda;
-            color: #155724;
-            padding: 15px;
-            border-radius: 10px;
-            margin: 20px 0;
-        }
-
-        .status-badge {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .status-нова {
-            background: #fff3cd;
-            color: #856404;
-        }
-
-        .status-в_роботі {
-            background: #d1ecf1;
-            color: #0c5460;
-        }
-
-        .status-виконання {
-            background: #d1ecf1;
-            color: #0c5460;
-        }
-
-        .status-виконана {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .status-відхилена {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        @media (max-width: 768px) {
-            .application-details {
-                grid-template-columns: 1fr;
+// Головна сторінка - інформація про API
+app.get('/', (req, res) => {
+    res.json({
+        message: 'API для системи заявок на видалення дерев',
+        version: '1.0.0',
+        endpoints: {
+            health: 'GET /health',
+            applications: {
+                create: 'POST /api/applications',
+                list: 'GET /api/applications',
+                stats: 'GET /api/applications/stats'
             }
-            
-            .controls {
-                flex-direction: column;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>👨‍💼 Панель адміністратора</h1>
-            <p>Управління заявками на видалення дерев</p>
-        </div>
+        },
+        status: 'Працює'
+    });
+});
 
-        <div class="stats" id="stats">
-            <div class="stat-card">
-                <div class="stat-number" id="totalCount">...</div>
-                <div class="stat-label">Всього заявок</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="newCount">...</div>
-                <div class="stat-label">Нових</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="inWorkCount">...</div>
-                <div class="stat-label">В роботі</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="completedCount">...</div>
-                <div class="stat-label">Виконано</div>
-            </div>
-        </div>
+// Перевірка здоров'я сервера
+app.get('/health', (req, res) => {
+    console.log('✅ Health check викликано');
+    res.json({
+        status: 'OK',
+        message: 'Сервер працює!',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        memory: process.memoryUsage()
+    });
+});
 
-        <div class="controls">
-            <button class="btn btn-primary" onclick="loadApplications()">
-                🔄 Оновити
-            </button>
-            <button class="btn btn-success" onclick="exportData()">
-                📊 Експорт Excel
-            </button>
-            <button class="btn btn-info" onclick="viewStats()">
-                📈 Детальна статистика
-            </button>
-        </div>
+// Створення нової заяви
+app.post('/api/applications', (req, res) => {
+    try {
+        console.log('📥 Отримано POST запит на /api/applications');
+        
+        const {
+            fullName,
+            address,
+            phone,
+            treeAddress,
+            treeType,
+            treeAge,
+            threat,
+            pdfBase64
+        } = req.body;
 
-        <div class="applications-list">
-            <div id="applicationsList">
-                <div class="loading">
-                    <h3>📡 Завантажуємо заяви...</h3>
-                    <p>Зачекайте, будь ласка</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        let applications = [];
-
-        // Автоматичне визначення URL сервера
-        function getServerURL() {
-            if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-                return window.location.origin;
-            }
-            return 'http://localhost:3000';
+        // Валідація обов'язкових полів
+        if (!fullName || !address || !treeAddress || !treeType || !threat) {
+            return res.status(400).json({
+                success: false,
+                error: 'Не всі обов\'язкові поля заповнені',
+                required: ['fullName', 'address', 'treeAddress', 'treeType', 'threat']
+            });
         }
 
-        // Завантаження заявок
-        async function loadApplications() {
-            const serverURL = getServerURL();
-            const statusEl = document.getElementById('applicationsList');
-            
-            try {
-                console.log('🔄 Завантажуємо заяви з:', `${serverURL}/api/applications`);
-                
-                statusEl.innerHTML = `
-                    <div class="loading">
-                        <h3>🔄 Завантажуємо заяви...</h3>
-                        <p>Сервер: ${serverURL}</p>
-                    </div>
-                `;
-                
-                const response = await fetch(`${serverURL}/api/applications`);
-                console.log('📨 Статус відповіді:', response.status);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const result = await response.json();
-                console.log('📋 Отримані дані:', result);
-                
-                if (result.success) {
-                    applications = result.data || [];
-                    console.log(`✅ Завантажено ${applications.length} заяв`);
-                    displayApplications();
-                    updateStats();
-                } else {
-                    throw new Error(result.error || 'API повернув success: false');
-                }
-            } catch (error) {
-                console.error('❌ Помилка завантаження заявок:', error);
-                statusEl.innerHTML = `
-                    <div class="error">
-                        <h3>❌ Помилка підключення</h3>
-                        <p><strong>URL:</strong> ${serverURL}/api/applications</p>
-                        <p><strong>Помилка:</strong> ${error.message}</p>
-                        <p><strong>Час:</strong> ${new Date().toLocaleTimeString()}</p>
-                        <button onclick="loadApplications()" class="btn btn-primary" style="margin-top: 10px;">
-                            🔄 Спробувати знову
-                        </button>
-                        <button onclick="testServerHealth()" class="btn btn-info" style="margin-top: 10px;">
-                            🏥 Перевірити сервер
-                        </button>
-                    </div>
-                `;
-            }
+        // Генеруємо унікальний номер заяви
+        const timestamp = Date.now();
+        const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+        const applicationNumber = `TREE-${date}-${timestamp.toString().slice(-6)}`;
+
+        // Зберігаємо PDF файл якщо є
+        const pdfFileName = savePDFFile(pdfBase64, applicationNumber, fullName);
+
+        // Створюємо об'єкт заяви
+        const application = {
+            id: applicationNumber,
+            applicationNumber,
+            fullName,
+            address,
+            phone: phone || null,
+            treeAddress,
+            treeType,
+            treeAge: treeAge || null,
+            threat,
+            pdfFileName,
+            status: 'нова',
+            submittedAt: new Date().toISOString(),
+            submittedDate: new Date().toLocaleDateString('uk-UA'),
+            submittedTime: new Date().toLocaleTimeString('uk-UA')
+        };
+
+        // Читаємо існуючі заяви
+        const applications = readApplications();
+        
+        // Додаємо нову заяву
+        applications.push(application);
+        
+        // Зберігаємо оновлений список
+        const saved = saveApplications(applications);
+        
+        if (!saved) {
+            return res.status(500).json({
+                success: false,
+                error: 'Помилка збереження заяви на сервері'
+            });
         }
 
-        // Тест здоров'я сервера
-        async function testServerHealth() {
-            const serverURL = getServerURL();
-            const statusEl = document.getElementById('applicationsList');
-            
-            try {
-                console.log('🏥 Тестуємо health endpoint...');
-                
-                statusEl.innerHTML = `
-                    <div class="loading">
-                        <h3>🏥 Перевіряємо стан сервера...</h3>
-                        <p>Тестуємо: ${serverURL}/health</p>
-                    </div>
-                `;
-                
-                const response = await fetch(`${serverURL}/health`);
-                const result = await response.json();
-                
-                console.log('🏥 Health check результат:', result);
-                
-                statusEl.innerHTML = `
-                    <div class="success">
-                        <h3>✅ Сервер працює!</h3>
-                        <p><strong>Статус:</strong> ${result.status}</p>
-                        <p><strong>Повідомлення:</strong> ${result.message}</p>
-                        <p><strong>Час сервера:</strong> ${result.timestamp}</p>
-                        <button onclick="loadApplications()" class="btn btn-primary" style="margin-top: 10px;">
-                            🔄 Завантажити заяви
-                        </button>
-                    </div>
-                `;
-                
-            } catch (error) {
-                console.error('❌ Health check failed:', error);
-                statusEl.innerHTML = `
-                    <div class="error">
-                        <h3>❌ Сервер недоступний</h3>
-                        <p><strong>URL:</strong> ${serverURL}/health</p>
-                        <p><strong>Помилка:</strong> ${error.message}</p>
-                        <p>Можливо, сервер "спить" і потребує часу для запуску (до 2 хвилин)</p>
-                        <button onclick="testServerHealth()" class="btn btn-primary" style="margin-top: 10px;">
-                            🔄 Спробувати знову
-                        </button>
-                    </div>
-                `;
-            }
-        }
-
-        // Відображення заявок
-        function displayApplications() {
-            const container = document.getElementById('applicationsList');
-            
-            if (applications.length === 0) {
-                container.innerHTML = `
-                    <div class="loading">
-                        <h3>📭 Заявок немає</h3>
-                        <p>Нові заявки з'являться тут автоматично</p>
-                    </div>
-                `;
-                return;
-            }
-
-            // Сортуємо по даті (нові спочатку)
-            applications.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
-
-            container.innerHTML = applications.map(app => `
-                <div class="application-item">
-                    <div class="application-header">
-                        <div>
-                            <div class="application-id">${app.applicationNumber || app.id}</div>
-                            <div class="application-date">
-                                ${new Date(app.submittedAt).toLocaleString('uk-UA')}
-                            </div>
-                        </div>
-                        <span class="status-badge status-${app.status || 'нова'}">
-                            ${app.status || 'нова'}
-                        </span>
-                    </div>
-                    
-                    <div class="application-details">
-                        <div class="detail-item">
-                            <div class="detail-label">Заявник</div>
-                            <div class="detail-value">${app.fullName}</div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">Адреса заявника</div>
-                            <div class="detail-value">${app.address}</div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">Телефон</div>
-                            <div class="detail-value">${app.phone || 'Не вказано'}</div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">Адреса дерева</div>
-                            <div class="detail-value">${app.treeAddress}</div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">Вид дерева</div>
-                            <div class="detail-value">${app.treeType}</div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">Вік дерева</div>
-                            <div class="detail-value">${app.treeAge || 'Не вказано'}</div>
-                        </div>
-                        <div class="detail-item threat-description">
-                            <div class="detail-label">Опис загрози</div>
-                            <div class="detail-value">${app.threat}</div>
-                        </div>
-                    </div>
-
-                    <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
-                        ${app.pdfFileName ? `
-                            <button class="btn btn-info" onclick="downloadPDF('${app.applicationNumber || app.id}')">
-                                📄 Скачати PDF
-                            </button>
-                        ` : ''}
-                        <button class="btn btn-success" onclick="viewDetails('${app.applicationNumber || app.id}')">
-                            👁️ Детальніше
-                        </button>
-                        
-                        ${(app.status || 'нова') === 'нова' ? `
-                            <button class="btn btn-warning" onclick="updateStatus('${app.applicationNumber || app.id}', 'в_роботі')">
-                                ⚙️ На опрацювання
-                            </button>
-                            <button class="btn btn-danger" onclick="updateStatus('${app.applicationNumber || app.id}', 'відхилена')">
-                                ❌ Відхилити
-                            </button>
-                        ` : ''}
-                        
-                        ${(app.status || 'нова') === 'в_роботі' ? `
-                            <button class="btn btn-primary" onclick="createWorkOrder('${app.applicationNumber || app.id}')">
-                                📋 Створити ордер
-                            </button>
-                            <button class="btn btn-success" onclick="updateStatus('${app.applicationNumber || app.id}', 'виконана')">
-                                ✅ Виконано
-                            </button>
-                        ` : ''}
-                        
-                        ${(app.status || 'нова') === 'відхилена' ? `
-                            <button class="btn btn-secondary" onclick="updateStatus('${app.applicationNumber || app.id}', 'нова')">
-                                🔄 Повернути в роботу
-                            </button>
-                        ` : ''}
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        // Оновлення статистики
-        function updateStats() {
-            const stats = {
-                total: applications.length,
-                new: applications.filter(app => (app.status || 'нова') === 'нова').length,
-                inWork: applications.filter(app => 
-                    app.status === 'в_роботі' || app.status === 'виконання'
-                ).length,
-                completed: applications.filter(app => app.status === 'виконана').length,
-                rejected: applications.filter(app => app.status === 'відхилена').length
-            };
-
-            document.getElementById('totalCount').textContent = stats.total;
-            document.getElementById('newCount').textContent = stats.new;
-            document.getElementById('inWorkCount').textContent = stats.inWork;
-            document.getElementById('completedCount').textContent = stats.completed;
-        }
-
-        // Скачування PDF
-        function downloadPDF(applicationId) {
-            const serverURL = getServerURL();
-            const url = `${serverURL}/api/applications/${applicationId}/pdf`;
-            
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `Заявка_${applicationId}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        // Перегляд деталей
-        function viewDetails(applicationId) {
-            const app = applications.find(a => 
-                (a.applicationNumber || a.id) === applicationId
-            );
-            
-            if (app) {
-                alert(`
-ЗАЯВКА ${app.applicationNumber || app.id}
-
-Заявник: ${app.fullName}
-Телефон: ${app.phone || 'Не вказано'}
-Адреса заявника: ${app.address}
-
-Дерево: ${app.treeType}
-Вік: ${app.treeAge || 'Не вказано'}
-Адреса дерева: ${app.treeAddress}
-
-Загроза: ${app.threat}
-
-Дата подання: ${new Date(app.submittedAt).toLocaleString('uk-UA')}
-Статус: ${app.status || 'нова'}
-                `);
-            }
-        }
-
-        // Експорт даних
-        function exportData() {
-            if (applications.length === 0) {
-                alert('Немає даних для експорту');
-                return;
-            }
-
-            const csvContent = [
-                'Номер заявки,ПІБ заявника,Адреса заявника,Телефон,Адреса дерева,Вид дерева,Вік дерева,Загроза,Дата подання,Статус',
-                ...applications.map(app => [
-                    app.applicationNumber || app.id,
-                    app.fullName,
-                    app.address,
-                    app.phone || '',
-                    app.treeAddress,
-                    app.treeType,
-                    app.treeAge || '',
-                    app.threat.replace(/,/g, ';'),
-                    new Date(app.submittedAt).toLocaleDateString('uk-UA'),
-                    app.status || 'нова'
-                ].join(','))
-            ].join('\n');
-
-            const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `Заявки_${new Date().toISOString().split('T')[0]}.csv`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        // Детальна статистика
-        async function viewStats() {
-            const serverURL = getServerURL();
-            
-            try {
-                const response = await fetch(`${serverURL}/api/applications/stats`);
-                const result = await response.json();
-                
-                if (result.success) {
-                    const stats = result.stats;
-                    alert(`
-СТАТИСТИКА ЗАЯВОК
-
-Загалом: ${stats.total}
-Нових: ${stats.byStatus?.нова || 0}
-В роботі: ${stats.byStatus?.в_роботі || 0}
-Виконаних: ${stats.byStatus?.виконана || 0}
-Відхилених: ${stats.byStatus?.відхилена || 0}
-
-З PDF файлами: ${stats.withPDF}
-
-Найпопулярніші види дерев:
-${Object.entries(stats.byTreeType || {})
-  .sort(([,a], [,b]) => b - a)
-  .slice(0, 5)
-  .map(([type, count]) => `- ${type}: ${count}`)
-  .join('\n')}
-                    `);
-                }
-            } catch (error) {
-                alert('Помилка отримання статистики: ' + error.message);
-            }
-        }
-
-        // Оновлення статусу заяви
-        async function updateStatus(applicationId, newStatus) {
-            const serverURL = getServerURL();
-            
-            try {
-                console.log(`Оновлюємо статус заяви ${applicationId} на "${newStatus}"`);
-                
-                const response = await fetch(`${serverURL}/api/admin/applications/${applicationId}/status`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        status: newStatus,
-                        adminNotes: `Статус змінено на "${newStatus}" ${new Date().toLocaleString('uk-UA')}`
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const result = await response.json();
-                
-                if (result.success) {
-                    alert(`✅ Статус заяви ${applicationId} змінено на "${newStatus}"`);
-                    // Оновлюємо список заяв
-                    loadApplications();
-                } else {
-                    throw new Error(result.error || 'Помилка оновлення статусу');
-                }
-                
-            } catch (error) {
-                console.error('Помилка оновлення статусу:', error);
-                alert(`❌ Помилка оновлення статусу: ${error.message}`);
-            }
-        }
-
-        // Створення робочого ордеру
-        async function createWorkOrder(applicationId) {
-            const application = applications.find(app => 
-                (app.applicationNumber || app.id) === applicationId
-            );
-            
-            if (!application) {
-                alert('Заявку не знайдено');
-                return;
-            }
-
-            const orderNumber = `ORD-${Date.now()}`;
-            const currentDate = new Date().toLocaleDateString('uk-UA');
-            
-            // Генеруємо робочий ордер
-            const orderContent = `
-РОБОЧИЙ ОРДЕР №${orderNumber}
-Дата створення: ${currentDate}
-
-=== ІНФОРМАЦІЯ ПРО ЗАЯВУ ===
-Номер заяви: ${application.applicationNumber || application.id}
-Заявник: ${application.fullName}
-Телефон: ${application.phone || 'Не вказано'}
-
-=== ЗАВДАННЯ ===
-Адреса виконання робіт: ${application.treeAddress}
-Вид дерева: ${application.treeType}
-Вік дерева: ${application.treeAge || 'Не вказано'}
-
-=== ОПИС ПРОБЛЕМИ ===
-${application.threat}
-
-=== ІНСТРУКЦІЇ ===
-1. Провести обстеження дерева
-2. Оцінити рівень небезпеки
-3. Виконати видалення згідно з технічними нормами
-4. Прибрати територію після робіт
-5. Повідомити про завершення
-
-=== ВІДПОВІДАЛЬНІ ===
-Бригадир: ___________________
-Виконавці: __________________
-Підпис: ____________________
-
-Термін виконання: ${new Date(Date.now() + 7*24*60*60*1000).toLocaleDateString('uk-UA')}
-            `;
-
-            // Створюємо та скачуємо ордер
-            const blob = new Blob([orderContent], { type: 'text/plain;charset=utf-8' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `Ордер_${orderNumber}_${application.fullName.replace(/\s/g, '_')}.txt`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            // Оновлюємо статус на виконання
-            if (confirm(`Ордер №${orderNumber} створено та завантажено.\nПозначити заяву як "виконується"?`)) {
-                await updateStatus(applicationId, 'виконання');
-            }
-        }
-        document.addEventListener('DOMContentLoaded', function() {
-            loadApplications();
-            
-            // Автооновлення кожні 30 секунд
-            setInterval(loadApplications, 30000);
+        // Логуємо успішне створення
+        console.log('📋 Дані заяви:', {
+            applicationNumber,
+            fullName,
+            address: address.substring(0, 50) + '...',
+            treeAddress: treeAddress.substring(0, 50) + '...',
+            treeType,
+            hasPDF: !!pdfFileName
         });
-    </script>
-</body>
-</html>
+
+        // Відправляємо успішну відповідь
+        res.status(201).json({
+            success: true,
+            message: 'Заяву успішно створено та збережено',
+            applicationNumber,
+            submittedAt: application.submittedAt,
+            pdfSaved: !!pdfFileName
+        });
+
+    } catch (error) {
+        console.error('❌ Помилка створення заяви:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Внутрішня помилка сервера',
+            details: error.message
+        });
+    }
+});
+
+// Отримання списку заяв
+app.get('/api/applications', (req, res) => {
+    try {
+        console.log('📥 Отримано GET запит на /api/applications');
+        
+        const applications = readApplications();
+        
+        // Сортуємо за датою (нові спочатку)
+        applications.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+        
+        console.log(`📊 Повернуто ${applications.length} заяв`);
+        
+        res.json({
+            success: true,
+            data: applications,
+            count: applications.length,
+            message: applications.length > 0 
+                ? `Знайдено ${applications.length} заяв` 
+                : 'Заяв сьогодні ще немає'
+        });
+
+    } catch (error) {
+        console.error('❌ Помилка отримання заяв:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Помилка читання заяв',
+            details: error.message
+        });
+    }
+});
+
+// Оновлення статусу заяви (для адміністратора)
+app.put('/api/admin/applications/:id/status', (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status, adminNotes } = req.body;
+
+        console.log(`📝 Запит на оновлення статусу заяви ${id} на "${status}"`);
+
+        // Читаємо поточні заяви
+        const applications = readApplications();
+        const applicationIndex = applications.findIndex(app => 
+            (app.applicationNumber || app.id) === id
+        );
+
+        if (applicationIndex === -1) {
+            return res.status(404).json({
+                success: false,
+                error: 'Заяву не знайдено'
+            });
+        }
+
+        // Зберігаємо старий статус для логування
+        const oldStatus = applications[applicationIndex].status || 'нова';
+
+        // Оновлюємо заяву
+        applications[applicationIndex].status = status;
+        applications[applicationIndex].statusUpdatedAt = new Date().toISOString();
+        applications[applicationIndex].statusUpdatedBy = 'admin';
+        
+        if (adminNotes) {
+            applications[applicationIndex].adminNotes = 
+                (applications[applicationIndex].adminNotes || '') + 
+                `\n${new Date().toLocaleString('uk-UA')}: ${adminNotes}`;
+        }
+
+        // Зберігаємо оновлений список
+        const saved = saveApplications(applications);
+        
+        if (!saved) {
+            return res.status(500).json({
+                success: false,
+                error: 'Помилка збереження змін'
+            });
+        }
+
+        console.log(`✅ Статус заяви ${id} змінено: "${oldStatus}" → "${status}"`);
+
+        res.json({
+            success: true,
+            message: `Статус заяви змінено на "${status}"`,
+            application: applications[applicationIndex]
+        });
+
+    } catch (error) {
+        console.error('❌ Помилка оновлення статусу:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Внутрішня помилка сервера',
+            details: error.message
+        });
+    }
+});
+
+// Отримання конкретної заяви
+app.get('/api/applications/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const applications = readApplications();
+        const application = applications.find(app => 
+            (app.applicationNumber || app.id) === id
+        );
+
+        if (!application) {
+            return res.status(404).json({
+                success: false,
+                error: 'Заяву не знайдено'
+            });
+        }
+
+        res.json({
+            success: true,
+            data: application
+        });
+
+    } catch (error) {
+        console.error('❌ Помилка отримання заяви:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Помилка читання заяви'
+        });
+    }
+});
+app.get('/api/applications/stats', (req, res) => {
+    try {
+        const applications = readApplications();
+        
+        const stats = {
+            total: applications.length,
+            byStatus: {
+                нова: applications.filter(app => (app.status || 'нова') === 'нова').length,
+                в_роботі: applications.filter(app => app.status === 'в_роботі').length,
+                виконання: applications.filter(app => app.status === 'виконання').length,
+                виконана: applications.filter(app => app.status === 'виконана').length,
+                відхилена: applications.filter(app => app.status === 'відхилена').length
+            },
+            byTreeType: {},
+            withPDF: applications.filter(app => app.pdfFileName).length,
+            todayDate: new Date().toLocaleDateString('uk-UA'),
+            lastUpdate: new Date().toISOString()
+        };
+
+        // Рахуємо за типами дерев
+        applications.forEach(app => {
+            const type = app.treeType || 'Не вказано';
+            stats.byTreeType[type] = (stats.byTreeType[type] || 0) + 1;
+        });
+
+        res.json({
+            success: true,
+            stats
+        });
+
+    } catch (error) {
+        console.error('❌ Помилка отримання статистики:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Помилка отримання статистики'
+        });
+    }
+});
+
+// Скачування PDF файлу заяви
+app.get('/api/applications/:id/pdf', (req, res) => {
+    try {
+        const { id } = req.params;
+        const applications = readApplications();
+        const application = applications.find(app => app.applicationNumber === id);
+
+        if (!application || !application.pdfFileName) {
+            return res.status(404).json({
+                success: false,
+                error: 'PDF файл не знайдено'
+            });
+        }
+
+        const filePath = path.join(uploadsDir, application.pdfFileName);
+        
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({
+                success: false,
+                error: 'PDF файл не знайдено на сервері'
+            });
+        }
+
+        const fileName = `Заява_${application.fullName.replace(/\s/g, '_')}.pdf`;
+        res.download(filePath, fileName);
+
+    } catch (error) {
+        console.error('❌ Помилка скачування PDF:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Помилка скачування файлу'
+        });
+    }
+});
+
+// Статичні файли (для прямого доступу до uploads)
+app.use('/uploads', express.static(uploadsDir));
+
+// Обробка неіснуючих маршрутів
+app.use('*', (req, res) => {
+    res.status(404).json({
+        success: false,
+        error: 'Маршрут не знайдено',
+        requestedUrl: req.originalUrl,
+        availableEndpoints: [
+            'GET /',
+            'GET /health',
+            'GET /api/applications',
+            'POST /api/applications',
+            'GET /api/applications/stats',
+            'GET /api/applications/:id/pdf'
+        ]
+    });
+});
+
+// Глобальна обробка помилок
+app.use((err, req, res, next) => {
+    console.error('💥 Глобальна помилка:', err);
+    
+    res.status(500).json({
+        success: false,
+        error: 'Щось пішло не так!',
+        details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+});
+
+// Запуск сервера
+const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log('\n' + '='.repeat(50));
+    console.log('🚀 Сервер запущено успішно!');
+    console.log('='.repeat(50));
+    console.log(`📍 Порт: ${PORT}`);
+    console.log(`🏥 Health check: /health`);
+    console.log(`📋 API заяв: /api/applications`);
+    console.log(`📊 Статистика: /api/applications/stats`);
+    console.log(`🌍 Режим: ${process.env.NODE_ENV || 'development'}`);
+    console.log('='.repeat(50));
+    console.log('✨ Готовий до роботи!\n');
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('🛑 Отримано сигнал SIGTERM. Закриваю сервер...');
+    server.close(() => {
+        console.log('✅ Сервер закрито');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('\n🛑 Отримано сигнал SIGINT (Ctrl+C). Закриваю сервер...');
+    server.close(() => {
+        console.log('✅ Сервер закрито');
+        process.exit(0);
+    });
+});
